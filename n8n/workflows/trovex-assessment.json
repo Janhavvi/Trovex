@@ -1,0 +1,179 @@
+{
+  "id": "a3c82d1e-b41a-48c4-9ec5-c3a4f6f326a9",
+  "name": "Trovex Assessment Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trovex-assessment",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "c7a6ed03-0bde-4f97-b335-1da945b2342a",
+      "name": "Trovex Event",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "trovex-assessment"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4f3f88d8-0c97-44db-a2a7-355eb88804b3",
+              "leftValue": "={{ $json.body.event }}",
+              "rightValue": "assessment.started",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "9293904a-7a90-422c-a40e-74864eb9fe6b",
+              "leftValue": "={{ $json.body.payload.target }}",
+              "rightValue": "http://trovex-lab:10000",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "55ec79ab-6847-4167-a4ee-1829826db30a",
+              "leftValue": "={{ $json.body.payload.authorizationRef }}",
+              "rightValue": "TROVEX-LAB-2026",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "45808c89-496a-4442-bbde-77ecc4a67f32",
+      "name": "Validate Authorized Lab Event",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://trovex-scanner:8082/scans",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { scanId: $json.body.payload.scanId, authorizationRef: $json.body.payload.authorizationRef } }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "ffb5e147-7724-4e61-8bb0-87082fd0c221",
+      "name": "Start Passive ZAP Baseline",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: $json.status, scanId: $json.scanId, scanner: $json.scanner, target: $json.target } }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "b52f3a71-05b7-4472-8e41-3b52ecde2771",
+      "name": "Accept Authorized Assessment",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        940,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'rejected', reason: 'Event or target is outside the authorized lab scope' } }}",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "72183345-c238-453b-9f74-60d01ca1e233",
+      "name": "Reject Out-of-Scope Event",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        700,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Trovex Event": {
+      "main": [
+        [
+          {
+            "node": "Validate Authorized Lab Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Authorized Lab Event": {
+      "main": [
+        [
+          {
+            "node": "Start Passive ZAP Baseline",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Out-of-Scope Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Passive ZAP Baseline": {
+      "main": [
+        [
+          {
+            "node": "Accept Authorized Assessment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "de0a1ef3-cb8e-4dd2-a0db-9096c4f48fd2",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

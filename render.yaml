@@ -1,0 +1,168 @@
+envVarGroups:
+  - name: trovex-internal
+    envVars:
+      - key: INTERNAL_SCAN_TOKEN
+        generateValue: true
+
+services:
+  - type: web
+    name: trovex-platform
+    runtime: node
+    region: ohio
+    plan: 0.5c-512mb
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DASHBOARD_USER
+        value: trovex-admin
+      - key: DASHBOARD_PASSWORD
+        generateValue: true
+      - key: MONITOR_TOKEN
+        generateValue: true
+      - key: PORT
+        value: "10000"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: trovex-results
+          property: connectionString
+      - key: AUTHORIZED_LAB_URL
+        value: http://trovex-lab:10000
+      - key: LAB_AUTHORIZATION_REF
+        value: TROVEX-LAB-2026
+      - key: LAB_AUTHORIZATION_VALID_UNTIL
+        sync: false
+      - key: N8N_BASE_URL
+        value: http://trovex-n8n:5678
+      - fromGroup: trovex-internal
+
+  - type: pserv
+    name: trovex-lab
+    runtime: docker
+    region: ohio
+    plan: 0.5c-512mb
+    dockerfilePath: ./lab/Dockerfile
+    dockerContext: ./lab
+    envVars:
+      - key: PORT
+        value: "10000"
+
+  - type: pserv
+    name: trovex-scanner
+    runtime: docker
+    region: ohio
+    plan: 1c-2g
+    dockerfilePath: ./scanner/Dockerfile
+    dockerContext: ./scanner
+    envVars:
+      - key: PORT
+        value: "8082"
+      - key: LAB_BASE_URL
+        value: http://trovex-lab:10000
+      - key: LAB_AUTHORIZATION_REF
+        fromService:
+          name: trovex-platform
+          type: web
+          envVarKey: LAB_AUTHORIZATION_REF
+      - key: API_CALLBACK_URL
+        value: http://trovex-platform:10000
+      - fromGroup: trovex-internal
+
+  - type: web
+    name: trovex-n8n
+    runtime: image
+    image:
+      url: docker.io/n8nio/n8n:2.41.3
+    region: ohio
+    plan: 1c-2g
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: "5678"
+      - key: N8N_PORT
+        value: "5678"
+      - key: N8N_HOST
+        fromService:
+          name: trovex-n8n
+          type: web
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
+      - key: N8N_PROTOCOL
+        value: https
+      - key: N8N_EDITOR_BASE_URL
+        fromService:
+          name: trovex-n8n
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: WEBHOOK_URL
+        fromService:
+          name: trovex-n8n
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: N8N_PROXY_HOPS
+        value: "1"
+      - key: N8N_SECURE_COOKIE
+        value: "true"
+      - key: N8N_ENCRYPTION_KEY
+        generateValue: true
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_HOST
+        fromDatabase:
+          name: trovex-n8n-db
+          property: host
+      - key: DB_POSTGRESDB_DATABASE
+        fromDatabase:
+          name: trovex-n8n-db
+          property: database
+      - key: DB_POSTGRESDB_USER
+        fromDatabase:
+          name: trovex-n8n-db
+          property: user
+      - key: DB_POSTGRESDB_PASSWORD
+        fromDatabase:
+          name: trovex-n8n-db
+          property: password
+      - key: DB_POSTGRESDB_SSL_ENABLED
+        value: "false"
+      - key: N8N_DIAGNOSTICS_ENABLED
+        value: "false"
+      - key: N8N_PERSONALIZATION_ENABLED
+        value: "false"
+      - key: N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS
+        value: "true"
+      - key: GENERIC_TIMEZONE
+        value: UTC
+
+  - type: cron
+    name: trovex-daily-monitor
+    runtime: node
+    region: ohio
+    plan: 0.5c-512mb
+    schedule: "0 3 * * *"
+    buildCommand: npm ci
+    startCommand: node scripts/monitor-lab.js
+    envVars:
+      - key: TROVEX_API_URL
+        value: http://trovex-platform:10000
+      - key: MONITOR_TOKEN
+        fromService:
+          name: trovex-platform
+          type: web
+          envVarKey: MONITOR_TOKEN
+
+databases:
+  - name: trovex-results
+    databaseName: trovex_results
+    user: trovex_app
+    region: ohio
+    plan: 0.1c-256mb
+    ipAllowList: []
+
+  - name: trovex-n8n-db
+    databaseName: n8n
+    user: n8n_app
+    region: ohio
+    plan: 0.1c-256mb
+    ipAllowList: []

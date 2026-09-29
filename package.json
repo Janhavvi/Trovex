@@ -1,0 +1,43 @@
+{
+  "name": "trovex-platform",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Trovex security assessment platform",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"node server.js\" \"vite --host 0.0.0.0 --port 8443\"",
+    "dev:frontend": "vite --host 0.0.0.0 --port 8443",
+    "dev:backend": "node server.js",
+    "start": "node server.js",
+    "stack:up": "docker compose up --build -d",
+    "stack:down": "docker compose down",
+    "n8n:up": "docker compose up -d n8n",
+    "n8n:down": "docker compose stop n8n",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 8443",
+    "format": "oxfmt",
+    "test": "node --test tests/api.test.mjs"
+  },
+  "dependencies": {
+    "@types/cytoscape": "^3.31.0",
+    "concurrently": "^9.2.0",
+    "cors": "^2.8.5",
+    "cytoscape": "^3.34.3",
+    "express": "^5.1.0",
+    "pg": "^8.23.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^3.10.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.0.0",
+    "oxfmt": "^0.2.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^8.0.5"
+  }
+}

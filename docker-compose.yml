@@ -1,0 +1,93 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: trovex
+      POSTGRES_USER: trovex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trovex -d trovex"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  trovex-platform:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      n8n:
+        condition: service_started
+      trovex-lab:
+        condition: service_started
+      trovex-scanner:
+        condition: service_started
+    ports:
+      - "127.0.0.1:3001:10000"
+    environment:
+      PORT: 10000
+      NODE_ENV: production
+      DASHBOARD_USER: ${DASHBOARD_USER:?Set DASHBOARD_USER in .env}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:?Set DASHBOARD_PASSWORD in .env}
+      DATABASE_URL: postgresql://trovex:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/trovex
+      N8N_BASE_URL: http://n8n:5678
+      AUTHORIZED_LAB_URL: http://trovex-lab:10000
+      LAB_AUTHORIZATION_REF: ${LAB_AUTHORIZATION_REF:?Set LAB_AUTHORIZATION_REF in .env}
+      LAB_AUTHORIZATION_VALID_UNTIL: ${LAB_AUTHORIZATION_VALID_UNTIL:?Set LAB_AUTHORIZATION_VALID_UNTIL in .env}
+      INTERNAL_SCAN_TOKEN: ${INTERNAL_SCAN_TOKEN:?Set INTERNAL_SCAN_TOKEN in .env}
+
+  trovex-lab:
+    build:
+      context: ./lab
+    restart: unless-stopped
+    expose:
+      - "10000"
+    environment:
+      PORT: 10000
+
+  trovex-scanner:
+    build:
+      context: ./scanner
+    restart: unless-stopped
+    depends_on:
+      - trovex-lab
+    expose:
+      - "8082"
+    environment:
+      PORT: 8082
+      LAB_BASE_URL: http://trovex-lab:10000
+      LAB_AUTHORIZATION_REF: ${LAB_AUTHORIZATION_REF:?Set LAB_AUTHORIZATION_REF in .env}
+      API_CALLBACK_URL: http://trovex-platform:10000
+      INTERNAL_SCAN_TOKEN: ${INTERNAL_SCAN_TOKEN:?Set INTERNAL_SCAN_TOKEN in .env}
+
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_SECURE_COOKIE: "false"
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY in .env}
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: trovex
+      DB_POSTGRESDB_USER: trovex
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      GENERIC_TIMEZONE: UTC
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

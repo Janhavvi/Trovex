@@ -1,0 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+@theme inline {
+  --color-background: #080c14;
+  --color-surface: #0d1520;
+  --color-surface-2: #111d2e;
+  --color-border: #1e2f46;
+  --color-border-bright: #2a3f5c;
+  --color-cyan: #00d4ff;
+  --color-cyan-dim: #0099bb;
+  --color-red: #ff3b3b;
+  --color-orange: #ff6b2b;
+  --color-yellow: #ffc107;
+  --color-green: #00e676;
+  --color-green-dim: #00a855;
+  --color-text: #e2eaf6;
+  --color-text-muted: #6b8aac;
+  --color-text-dim: #3d5470;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Inter', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #080c14;
+  color: #e2eaf6;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e2f46;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a3f5c;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.scan-line {
+  animation: scanline 2s ease-in-out infinite;
+}
+
+@keyframes scanline {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.pulse-ring {
+  animation: pulseRing 2s ease-out infinite;
+}
+
+@keyframes pulseRing {
+  0% { transform: scale(0.95); opacity: 1; }
+  70% { transform: scale(1.1); opacity: 0; }
+  100% { transform: scale(0.95); opacity: 0; }
+}
+
+.chain-node {
+  animation: chainPulse 3s ease-in-out infinite;
+}
+
+@keyframes chainPulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.severity-critical { color: #ff3b3b; }
+.severity-high { color: #ff6b2b; }
+.severity-medium { color: #ffc107; }
+.severity-low { color: #00d4ff; }
+.severity-info { color: #6b8aac; }
+
+.bg-severity-critical { background-color: rgba(255, 59, 59, 0.15); border-color: rgba(255, 59, 59, 0.4); }
+.bg-severity-high { background-color: rgba(255, 107, 43, 0.15); border-color: rgba(255, 107, 43, 0.4); }
+.bg-severity-medium { background-color: rgba(255, 193, 7, 0.12); border-color: rgba(255, 193, 7, 0.4); }
+.bg-severity-low { background-color: rgba(0, 212, 255, 0.1); border-color: rgba(0, 212, 255, 0.3); }
+.bg-severity-info { background-color: rgba(107, 138, 172, 0.1); border-color: rgba(107, 138, 172, 0.3); }
+
+.status-confirmed { color: #ff3b3b; }
+.status-unverified { color: #ffc107; }
+.status-fixed { color: #00e676; }
+.status-regressed { color: #ff6b2b; }
