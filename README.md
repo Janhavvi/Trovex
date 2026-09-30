@@ -1,59 +1,194 @@
-# Trovex Platform
+# Trovex
 
-A React + Vite dashboard for visualizing security assessment findings, attack paths, role exposure, mobile risk, and evidence collection.
+Safe. Proven. Fixed.
 
-## Getting started
+Trovex is an evidence-first cybersecurity assessment platform for discovering, validating, fixing, and re-testing security findings in a controlled environment. It combines a React frontend, an Express API, a Postgres-backed data layer, security workflow automation, and a private lab model for scoped assessment operations.
+
+## Overview
+
+The platform is designed around a security workflow:
+
+- Target / scope definition
+- Scan and validation
+- Evidence capture
+- Attack path analysis
+- Fix and re-test
+- Report generation
+
+It includes a secure login flow, role-based access control, a production-ready dashboard, and a lab-oriented assessment model intended for controlled security testing.
+
+## Tech stack
+
+- Frontend: React + Vite
+- API: Node.js + Express
+- Database: PostgreSQL
+- Workflow automation: n8n
+- Container lab: Docker
+- Reporting: PDF and SARIF-style report generation
+- Security: hashed passwords, scoped target validation, HTTP-only sessions, and backend enforcement
+
+## Project structure
+
+```text
+.
+├── src/                 # React app
+├── server/              # Backend helpers, scoring, reports, DB access
+├── tests/               # API and smoke tests
+├── n8n/                 # Workflow definitions
+├── lab/                 # Lab-related service code
+├── scanner/             # Scanner service
+├── scripts/             # Utility scripts
+├── docker-compose.yml   # Local stack configuration
+├── Dockerfile           # App container config
+├── server.js            # Express server entry point
+├── package.json         # Scripts and dependencies
+├── vite.config.ts      # Vite configuration
+├── render.yaml          # Render deployment blueprint
+├── .env.example         # Example environment config
+├── README.md            # Project documentation
+└── index.html           # App entry HTML
+```
+
+## Features
+
+- Secure account creation and login
+- Role-based permissions for Admin, Security Analyst, and Viewer
+- Scoped authorized target mode with validation checks
+- Security dashboard and workload views
+- Findings and evidence tracking
+- Attack path visualization
+- Fix and re-test lifecycle support
+- Reporting exports
+- Local Docker stack for lab and automation integration
+
+## Local development
+
+1. Install dependencies
 
 ```bash
 npm install
+```
+
+2. Start the app in development mode
+
+```bash
 npm run dev
 ```
 
-This starts the Vite frontend and the Express API for UI development:
+This starts the frontend and backend together.
 
 - Frontend: http://localhost:8443/
-- Backend: http://localhost:3001/api/health
+- Backend: http://localhost:3001
 
-## Local Monitoring Stack
-
-The full local stack runs the dashboard/API, Postgres, n8n, a private training lab, and the private OWASP ZAP Baseline adapter. Before the first run, generate local credentials. The initializer preserves existing values and appends missing role credentials without printing secrets. Never commit `.env`.
+3. Optional: start only the frontend or backend
 
 ```bash
-npm run env:init
+npm run dev:frontend
+npm run dev:backend
+```
+
+## Docker / local stack
+
+The project includes a Docker-based stack to run the platform plus supporting services.
+
+```bash
 npm run stack:up
 ```
 
-The generated `.env` contains local admin, analyst, and viewer credentials; keep it private. Open http://localhost:3001 for the dashboard and http://localhost:5678 for n8n. Create the n8n owner account on first visit, then import `n8n/workflows/trovex-assessment.json` and activate it once. The lab and scanner have no host-published ports; the scanner is pinned to the private `trovex-lab` service and runs the ZAP Baseline passive checks only.
+To stop it:
 
-Sign in at `/login`; public account creation is at `/signup` and is limited to Security Analyst or Viewer. Admin accounts are provisioned from local environment credentials, not public registration. Passwords are stored as scrypt hashes, and opaque HTTP-only session cookies are persisted by hash. Email verification and password recovery are not configured; the app does not simulate either flow.
+```bash
+npm run stack:down
+```
 
-The Overview button sends `assessment.started` to the API. The backend creates a scan record, injects its configured lab URL and authorization reference, and rejects mismatched targets, expired authorization, or a disabled kill switch. n8n validates the scope, starts the scanner, and returns the job ID. Results are written to Postgres and shown in Findings and Overview. A Render cron service triggers the same scoped workflow daily at 03:00 UTC.
+The stack is intended for local workshop or demo usage and keeps lab/service components isolated from public exposure.
 
-The scanner accepts only jobs created by the backend, checks a generated internal callback token, and never accepts a caller-selected target. The lab is a separate private service; the public dashboard is not included in the scan scope.
+## Environment variables
 
-Stop the local stack with `npm run stack:down`. Postgres data is kept in its named Docker volume.
+Create a local environment file based on the project example and keep secrets out of source control.
 
-## Render Deployment
+```bash
+cp .env.example .env
+```
 
-`render.yaml` defines the full stack. The GitHub repository must contain the project and this Blueprint before Render can deploy it. In Render, choose **New > Blueprint** and connect the repository. Render generates the internal callback token and n8n encryption key; enter the lab authorization expiry in the Blueprint prompt. Keep all actual secrets in Render environment settings, not GitHub.
+Typical variables include:
 
-The app, lab, and scanner communicate over Render's private network. The lab and scanner are private services; the public dashboard is never used as a scan target. Postgres stores app findings and n8n workflow data in separate databases. n8n's workflow must be imported and activated once from its Render URL. Render's web services, private services, and Postgres plans in this Blueprint are paid; check current pricing before deploying.
+- `PORT`
+- `NODE_ENV`
+- `DATABASE_URL`
+- `FRONTEND_URL`
+- `JWT_SECRET` / `SESSION_SECRET`
+- `N8N_WEBHOOK_URL`
+- `N8N_AUTOMATION_KEY`
+- `WEBHOOK_SECRET`
+- `AUTHORIZED_LAB_URL`
+- `LAB_AUTHORIZATION_REF`
 
-Only OWASP ZAP Baseline is used. It crawls the isolated lab and evaluates passive rules; it does not run the active scanner. The daily monitor reuses the same backend scope guard.
+Do not commit actual secret values.
 
-## Production build
+## Authentication and RBAC
+
+The application includes a backend-driven authentication flow with secure password handling and session-based access.
+
+Supported roles include:
+
+- Admin
+- Security Analyst
+- Viewer
+
+Access is enforced on the backend, not only in the UI. Public sign-up is intended for limited user roles, while elevated administrative access must use a controlled mechanism rather than broad public registration.
+
+## Security model
+
+The platform includes protections around the assessment flow:
+
+- private lab allowlist enforcement
+- authorization checks for target access
+- kill-switch protection for scans
+- rate-limited auth attempts
+- HTTP-only cookies for sessions
+- security headers
+- no plaintext password storage
+
+## Testing
+
+Run the project test suite:
+
+```bash
+npm test
+```
+
+Production build verification:
 
 ```bash
 npm run build
 ```
 
-## Scripts
+## Useful scripts
 
-- `npm run dev` — start the frontend and API together
-- `npm run dev:frontend` — start only the Vite app
-- `npm run dev:backend` — start only the Express API
-- `npm run stack:up` — build and start the complete local Docker stack
-- `npm run stack:down` — stop the local Docker stack
-- `npm run build` — create a production build
-- `npm run preview` — preview the production build locally
-- `npm test` — run the backend smoke test
+```bash
+npm run dev
+npm run dev:frontend
+npm run dev:backend
+npm run stack:up
+npm run stack:down
+npm run build
+npm run preview
+npm test
+```
+
+## Deployment notes
+
+The project is structured to support deployment to a free-tier stack such as:
+
+- Frontend: Vercel
+- Backend: Render
+- Database: PostgreSQL / Neon-compatible service
+- Automation: n8n
+- Lab: Docker / isolated service environment
+
+The deployment configuration is included in the repository and is intended to be adapted to the actual cloud environment. The repository should never contain live credentials or secrets.
+
+## License
+
+This project is provided for internal and project-based development use. Update this section if your repository uses a specific license.

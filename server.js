@@ -443,7 +443,7 @@ const evidence = [
   },
 ];
 
-app.get('/api/health', (_req, res) => {
+function sendHealthResponse(res) {
   res.json({
     status: 'ok',
     service: 'trovex-api',
@@ -451,6 +451,14 @@ app.get('/api/health', (_req, res) => {
     uptime: process.uptime(),
     database: process.env.DATABASE_URL ? 'postgres-configured' : 'local-memory',
   });
+}
+
+app.get('/health', (_req, res) => {
+  sendHealthResponse(res);
+});
+
+app.get('/api/health', (_req, res) => {
+  sendHealthResponse(res);
 });
 
 app.post('/api/scope/check', requireRole('ADMIN', 'SECURITY_ANALYST'), async (req, res) => {
