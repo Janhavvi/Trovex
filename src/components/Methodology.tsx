@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 const modules = [
   { id: 1, name: 'Session / Auth', checks: ['Login rate limiting', 'Token expiry', 'Weak password acceptance', 'Brute-force detection'] },
   { id: 2, name: 'Role Matrix / IDOR', checks: ['Horizontal privilege escalation', 'Vertical privilege escalation', 'Object ownership checks', 'IDOR enumeration'] },
@@ -13,6 +15,45 @@ const modules = [
 ];
 
 export default function Methodology() {
+  const [phases, setPhases] = useState<string[]>([
+    'Scope validation',
+    'Role matrix review',
+    'API abuse testing',
+    'AI prompt injection review',
+    'Threat chaining and evidence validation',
+    'Production hardening review',
+  ]);
+
+  useEffect(() => {
+    let isMounted = true;
+    void fetch('/api/methodology')
+      .then((response) => {
+        if (!response.ok) throw new Error('Methodology unavailable');
+        return response.json();
+      })
+      .then((data) => {
+        if (isMounted && Array.isArray(data?.phases)) {
+          setPhases(data.phases);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setPhases([
+            'Scope validation',
+            'Role matrix review',
+            'API abuse testing',
+            'AI prompt injection review',
+            'Threat chaining and evidence validation',
+            'Production hardening review',
+          ]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <div style={{ padding: 24, maxWidth: 900 }}>
       <div style={{ marginBottom: 24 }}>
@@ -71,6 +112,21 @@ export default function Methodology() {
       </div>
 
       {/* Scanner modules */}
+      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#3d5470', letterSpacing: 1, marginBottom: 10, textTransform: 'uppercase' }}>
+        Methodology Phases ({phases.length})
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginBottom: 18 }}>
+        {phases.map((phase, index) => (
+          <div key={`${phase}-${index}`} style={{ background: '#0d1520', border: '1px solid #1e2f46', borderRadius: 8, padding: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div style={{ width: 9, height: 9, borderRadius: '50%', background: index < 4 ? '#00d4ff' : '#00e676', boxShadow: '0 0 8px rgba(0,212,255,0.5)' }} />
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#00d4ff', letterSpacing: 1 }}>PHASE {String(index + 1).padStart(2, '0')}</div>
+            </div>
+            <div style={{ fontSize: 12, color: '#e2eaf6', lineHeight: 1.5 }}>{phase}</div>
+          </div>
+        ))}
+      </div>
+
       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#3d5470', letterSpacing: 1, marginBottom: 10, textTransform: 'uppercase' }}>
         Scanner Modules ({modules.length})
       </div>

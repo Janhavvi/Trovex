@@ -1,4 +1,5 @@
 import json
+import hmac
 import os
 import subprocess
 import tempfile
@@ -16,6 +17,8 @@ INTERNAL_SCAN_TOKEN = os.environ["INTERNAL_SCAN_TOKEN"]
 ZAP_BASELINE = os.environ.get("ZAP_BASELINE", "/zap/zap-baseline.py")
 active_lock = threading.Lock()
 active_scans = set()
+active_processes = {}
+cancelled_scans = set()
 
 
 def normalize_alerts(report):
@@ -70,18 +73,35 @@ def get_authorized_job(scan_id):
 
 def run_baseline(scan_id):
     report_path = None
+    process = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as report_file:
+        with tempfile.NamedTemporaryFile(dir="/zap/wrk", suffix=".json", delete=False) as report_file:
             report_path = report_file.name
 
-        result = subprocess.run(
-            [ZAP_BASELINE, "-t", LAB_BASE_URL, "-m", "2", "-T", "5", "-J", report_path],
-            capture_output=True,
+        process = subprocess.Popen(
+            [ZAP_BASELINE, "-t", LAB_BASE_URL, "-m", "2", "-T", "5", "-J", os.path.basename(report_path)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=360,
-            check=False,
         )
-        if result.returncode > 2 or not os.path.exists(report_path):
+        with active_lock:
+            active_processes[scan_id] = process
+            should_cancel = scan_id in cancelled_scans
+        if should_cancel and process.poll() is None:
+            process.terminate()
+
+        try:
+            process.communicate(timeout=360)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+            raise RuntimeError("OWASP ZAP Baseline exceeded its six-minute execution limit") from None
+
+        with active_lock:
+            was_cancelled = scan_id in cancelled_scans
+        if was_cancelled:
+            raise RuntimeError("assessment cancelled by the kill switch")
+        if process.returncode > 2 or not os.path.exists(report_path):
             raise RuntimeError("OWASP ZAP Baseline did not produce a report")
 
         with open(report_path, encoding="utf-8") as report_file:
@@ -96,7 +116,23 @@ def run_baseline(scan_id):
         if report_path and os.path.exists(report_path):
             os.unlink(report_path)
         with active_lock:
+            active_processes.pop(scan_id, None)
+            cancelled_scans.discard(scan_id)
             active_scans.discard(scan_id)
+
+
+def cancel_scan(scan_id):
+    with active_lock:
+        if scan_id not in active_scans:
+            return False
+        cancelled_scans.add(scan_id)
+        process = active_processes.get(scan_id)
+        if process and process.poll() is None:
+            try:
+                process.terminate()
+            except ProcessLookupError:
+                pass
+        return True
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -115,6 +151,22 @@ class Handler(BaseHTTPRequestHandler):
         self.respond(404, {"error": "not found"})
 
     def do_POST(self):
+        if self.path.startswith("/scans/") and self.path.endswith("/cancel"):
+            provided_token = self.headers.get("authorization", "").removeprefix("Bearer ")
+            if not hmac.compare_digest(provided_token, INTERNAL_SCAN_TOKEN):
+                self.respond(401, {"error": "unauthorized scanner cancellation"})
+                return
+            try:
+                scan_id = str(uuid.UUID(self.path.split("/")[2]))
+            except (ValueError, IndexError):
+                self.respond(400, {"error": "scanId must be a valid UUID"})
+                return
+            if not cancel_scan(scan_id):
+                self.respond(409, {"error": "scan is not active"})
+                return
+            self.respond(202, {"scanId": scan_id, "status": "cancelling"})
+            return
+
         if self.path != "/scans":
             self.respond(404, {"error": "not found"})
             return

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 
-type Screen = 'overview' | 'findings' | 'roles' | 'chains' | 'mobile' | 'vault' | 'methodology' | 'scope';
+type Screen = 'overview' | 'findings' | 'roles' | 'chains' | 'mobile' | 'vault' | 'methodology' | 'scope' | 'reports';
 
 interface SidebarProps {
   active: Screen;
   onNavigate: (s: Screen) => void;
   onKillSwitch: () => void;
   killActive: boolean;
+  canKillSwitch: boolean;
 }
 
 const nav: { id: Screen; label: string; icon: string }[] = [
@@ -18,13 +19,15 @@ const nav: { id: Screen; label: string; icon: string }[] = [
   { id: 'vault', label: 'Evidence Vault', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' },
   { id: 'scope', label: 'Scope Guard', icon: 'M12 2l7 4v6c0 5.25-3.44 9.95-7 12-3.56-2.05-7-6.75-7-12V6l7-4zm0 5.5l-2.5 2.5 1.5 1.5L12 15l3.5-3.5L14 10l-2 2v-4.5z' },
   { id: 'methodology', label: 'Methodology', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0 1 12 2.944a11.955 11.955 0 0 1-8.618 3.04A12.02 12.02 0 0 0 3 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+  { id: 'reports', label: 'Reports', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h8' },
 ];
 
-export default function Sidebar({ active, onNavigate, onKillSwitch, killActive }: SidebarProps) {
+export default function Sidebar({ active, onNavigate, onKillSwitch, killActive, canKillSwitch }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
     <aside
+    className="trovex-sidebar"
       style={{
         width: collapsed ? 56 : 220,
         transition: 'width 0.2s ease',
@@ -104,6 +107,7 @@ export default function Sidebar({ active, onNavigate, onKillSwitch, killActive }
       <div style={{ padding: 12, borderTop: '1px solid #1e2f46' }}>
         <button
           onClick={onKillSwitch}
+          disabled={!canKillSwitch}
           title="Kill Switch — halt all scans"
           style={{
             width: '100%',
@@ -113,7 +117,8 @@ export default function Sidebar({ active, onNavigate, onKillSwitch, killActive }
             background: killActive ? 'rgba(255, 59, 59, 0.2)' : 'rgba(255, 59, 59, 0.08)',
             border: `1px solid ${killActive ? '#ff3b3b' : '#ff3b3b44'}`,
             borderRadius: 6,
-            cursor: 'pointer',
+            cursor: canKillSwitch ? 'pointer' : 'not-allowed',
+            opacity: canKillSwitch ? 1 : 0.45,
             color: '#ff3b3b',
             transition: 'all 0.15s ease',
           }}

@@ -13,6 +13,20 @@ const severityColors = {
   INFO: '#6b8aac',
 };
 
+type PhaseStatus = {
+  name: string;
+  status: 'complete' | 'in-progress' | 'pending';
+  detail: string;
+};
+
+type EventItem = {
+  id: string;
+  step: string;
+  status: string;
+  createdAt: string;
+  detail?: string | null;
+};
+
 function PostureGauge({ score, grade }: { score: number; grade: string }) {
   const angle = -135 + (score / 100) * 270;
   const gradeColor = grade === 'A' ? '#00e676' : grade === 'B' ? '#00d4ff' : grade === 'C' ? '#ffc107' : grade === 'D' ? '#ff6b2b' : '#ff3b3b';
@@ -71,9 +85,10 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   return null;
 };
 
-export default function Overview({ onRunAssessment, scanning, runError }: { onRunAssessment: () => void; scanning: boolean; runError: string | null }) {
+export default function Overview({ onRunAssessment, scanning, runError, canRunAssessment }: { onRunAssessment: () => void; scanning: boolean; runError: string | null; canRunAssessment: boolean }) {
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState<boolean | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
   const [liveOverview, setLiveOverview] = useState<{
     target: string;
     postureScore: number;
@@ -85,6 +100,8 @@ export default function Overview({ onRunAssessment, scanning, runError }: { onRu
     severityCounts: Record<string, number>;
     scoreHistory: typeof scoreHistory;
     hasScan: boolean;
+    phases?: PhaseStatus[];
+    recentEvents?: EventItem[];
   } | null>(null);
 
   useEffect(() => {
@@ -112,13 +129,33 @@ export default function Overview({ onRunAssessment, scanning, runError }: { onRu
   const postureScore = liveOverview?.postureScore ?? currentScore;
   const postureGrade = liveOverview?.grade ?? currentGrade;
   const chartHistory = liveOverview?.scoreHistory ?? scoreHistory;
+  const phases = liveOverview?.phases ?? [
+    { name: 'Scope validation', status: 'complete', detail: 'Private lab is enforced' },
+    { name: 'Authorization verification', status: 'complete', detail: 'Signed auth is checked' },
+    { name: 'Scan orchestration', status: 'in-progress', detail: 'Automation is running' },
+    { name: 'Evidence validation', status: 'pending', detail: 'Findings are chained to evidence' },
+  ];
+  const recentEvents = liveOverview?.recentEvents ?? [
+    { id: 'evt-1', step: 'assessment.started', status: 'accepted', createdAt: new Date().toISOString(), detail: 'Dashboard assessment request accepted' },
+  ];
 
   const severityBarData = Object.entries(counts).map(([sev, count]) => ({ name: sev, count, color: severityColors[sev as keyof typeof severityColors] }));
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     setVerifying(true);
     setVerified(null);
-    setTimeout(() => { setVerifying(false); setVerified(true); }, 2200);
+    setVerifyError(null);
+    try {
+      const response = await fetch('/api/evidence/verify');
+      if (!response.ok) throw new Error('Evidence integrity verification is unavailable');
+      const result = await response.json();
+      setVerified(result.valid === true);
+      if (!result.valid) setVerifyError(`Integrity violation at ${result.failedRecordId}`);
+    } catch (error) {
+      setVerifyError(error instanceof Error ? error.message : 'Unable to verify evidence integrity');
+    } finally {
+      setVerifying(false);
+    }
   };
 
   return (
@@ -137,6 +174,7 @@ export default function Overview({ onRunAssessment, scanning, runError }: { onRu
               {runError}
             </div>
           )}
+          {verifyError && <div role="alert" style={{ marginTop: 6, color: '#ff8d8d', fontFamily: 'JetBrains Mono, monospace', fontSize: 9 }}>{verifyError}</div>}
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button
@@ -154,21 +192,23 @@ export default function Overview({ onRunAssessment, scanning, runError }: { onRu
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               {verified === true && <path d="M9 12l2 2 4-4" />}
             </svg>
-            {verifying ? 'VERIFYING…' : verified === true ? 'CHAIN INTACT' : 'VERIFY EVIDENCE'}
+            {verifying ? 'VERIFYING…' : verified === true ? 'CHAIN INTACT' : verified === false ? 'INTEGRITY ISSUE' : 'VERIFY EVIDENCE'}
           </button>
           <button
             onClick={onRunAssessment}
-            disabled={scanning}
+            disabled={scanning || !canRunAssessment}
             style={{
-              padding: '8px 16px', borderRadius: 6, cursor: scanning ? 'default' : 'pointer',
+              padding: '8px 16px', borderRadius: 6, cursor: scanning || !canRunAssessment ? 'default' : 'pointer',
               fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: 0.5,
-              background: scanning ? 'rgba(0, 212, 255, 0.05)' : 'rgba(0, 212, 255, 0.12)',
-              border: `1px solid ${scanning ? '#00d4ff44' : '#00d4ff66'}`,
-              color: '#00d4ff',
+              background: scanning || !canRunAssessment ? 'rgba(0, 212, 255, 0.05)' : 'rgba(0, 212, 255, 0.12)',
+              border: `1px solid ${scanning || !canRunAssessment ? '#00d4ff44' : '#00d4ff66'}`,
+              color: canRunAssessment ? '#00d4ff' : '#6b8aac',
               display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
-            {scanning ? (
+            {!canRunAssessment ? (
+              'VIEW ONLY'
+            ) : scanning ? (
               <>
                 <span className="scan-line" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#00d4ff' }} />
                 SCANNING…
@@ -257,6 +297,60 @@ export default function Overview({ onRunAssessment, scanning, runError }: { onRu
               <Area type="monotone" dataKey="score" stroke="#00d4ff" strokeWidth={2} fill="url(#scoreGrad)" dot={{ fill: '#00d4ff', r: 3 }} name="Score" />
             </AreaChart>
           </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 16 }}>
+        <div style={{ background: '#0d1520', border: '1px solid #1e2f46', borderRadius: 8, padding: 16 }}>
+          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#3d5470', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12 }}>
+            Assessment Phase Timeline
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {phases.map((phase, index) => (
+              <div key={`${phase.name}-${index}`} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 2 }}>
+                  <div style={{
+                    width: 12, height: 12, borderRadius: '50%',
+                    background: phase.status === 'complete' ? '#00e676' : phase.status === 'in-progress' ? '#00d4ff' : '#1e2f46',
+                    border: `1px solid ${phase.status === 'complete' ? '#00e676' : phase.status === 'in-progress' ? '#00d4ff' : '#3d5470'}`,
+                    boxShadow: phase.status === 'in-progress' ? '0 0 10px rgba(0,212,255,0.6)' : 'none',
+                  }} />
+                  {index < phases.length - 1 && <div style={{ width: 1, height: 18, background: '#1e2f46', marginTop: 4 }} />}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 2 }}>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#e2eaf6' }}>{phase.name}</span>
+                    <span style={{
+                      fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
+                      color: phase.status === 'complete' ? '#00e676' : phase.status === 'in-progress' ? '#00d4ff' : '#6b8aac',
+                      textTransform: 'uppercase',
+                    }}>
+                      {phase.status}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#6b8aac', lineHeight: 1.5 }}>{phase.detail}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ background: '#0d1520', border: '1px solid #1e2f46', borderRadius: 8, padding: 16 }}>
+          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#3d5470', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12 }}>
+            Recent Automation Events
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {recentEvents.map((event) => (
+              <div key={event.id} style={{ background: '#080c14', border: '1px solid #1e2f46', borderRadius: 6, padding: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#00d4ff' }}>{event.step}</span>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8, color: event.status === 'accepted' ? '#00e676' : '#ffc107', textTransform: 'uppercase' }}>{event.status}</span>
+                </div>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8, color: '#3d5470' }}>{new Date(event.createdAt).toISOString().slice(0, 16).replace('T', ' ')} UTC</div>
+                {event.detail && <div style={{ marginTop: 6, fontSize: 11, color: '#6b8aac', lineHeight: 1.5 }}>{event.detail}</div>}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

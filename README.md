@@ -16,14 +16,16 @@ This starts the Vite frontend and the Express API for UI development:
 
 ## Local Monitoring Stack
 
-The full local stack runs the dashboard/API, Postgres, n8n, a private training lab, and the private OWASP ZAP Baseline adapter. Before the first run, copy `.env.example` to `.env` and replace its placeholders with local-only random values. Never commit `.env`.
+The full local stack runs the dashboard/API, Postgres, n8n, a private training lab, and the private OWASP ZAP Baseline adapter. Before the first run, generate local credentials. The initializer preserves existing values and appends missing role credentials without printing secrets. Never commit `.env`.
 
 ```bash
-Copy-Item .env.example .env
+npm run env:init
 npm run stack:up
 ```
 
-Open http://localhost:3001 for the dashboard and http://localhost:5678 for n8n. On the first n8n visit, create its owner account, import `n8n/workflows/trovex-assessment.json`, and publish/activate it. The lab and scanner have no host-published ports; the scanner is pinned to the private `trovex-lab` service and runs the ZAP Baseline passive checks only.
+The generated `.env` contains local admin, analyst, and viewer credentials; keep it private. Open http://localhost:3001 for the dashboard and http://localhost:5678 for n8n. Create the n8n owner account on first visit, then import `n8n/workflows/trovex-assessment.json` and activate it once. The lab and scanner have no host-published ports; the scanner is pinned to the private `trovex-lab` service and runs the ZAP Baseline passive checks only.
+
+Sign in at `/login`; public account creation is at `/signup` and is limited to Security Analyst or Viewer. Admin accounts are provisioned from local environment credentials, not public registration. Passwords are stored as scrypt hashes, and opaque HTTP-only session cookies are persisted by hash. Email verification and password recovery are not configured; the app does not simulate either flow.
 
 The Overview button sends `assessment.started` to the API. The backend creates a scan record, injects its configured lab URL and authorization reference, and rejects mismatched targets, expired authorization, or a disabled kill switch. n8n validates the scope, starts the scanner, and returns the job ID. Results are written to Postgres and shown in Findings and Overview. A Render cron service triggers the same scoped workflow daily at 03:00 UTC.
 

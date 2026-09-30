@@ -6,10 +6,15 @@ import RoleMatrix from './components/RoleMatrix';
 import AttackPaths from './components/AttackPaths';
 import Mobile from './components/Mobile';
 import EvidenceVault from './components/EvidenceVault';
+import Login from './components/Login';
 import Methodology from './components/Methodology';
+import Reports from './components/Reports';
+import SignUp from './components/SignUp';
 import ScopeGuard from './components/ScopeGuard';
 
-type Screen = 'overview' | 'findings' | 'roles' | 'chains' | 'mobile' | 'vault' | 'methodology' | 'scope';
+type Screen = 'overview' | 'findings' | 'roles' | 'chains' | 'mobile' | 'vault' | 'methodology' | 'scope' | 'reports';
+type AuthPage = 'login' | 'signup';
+type SessionUser = { username: string; role: 'ADMIN' | 'SECURITY_ANALYST' | 'VIEWER' };
 
 function ScanProgress({ scanId, onComplete, onFailure }: { scanId: string | null; onComplete: () => void; onFailure: (message: string) => void }) {
   const [phase, setPhase] = useState('Submitting assessment to the private lab…');
@@ -100,18 +105,19 @@ function ScanProgress({ scanId, onComplete, onFailure }: { scanId: string | null
   );
 }
 
-function TopBar({ screen, scanning, onKillSwitch, killActive }: { screen: Screen; scanning: boolean; onKillSwitch: () => void; killActive: boolean }) {
+function TopBar({ screen, scanning, user, onLogout }: { screen: Screen; scanning: boolean; user: SessionUser; onLogout: () => void }) {
   const labels: Record<Screen, string> = {
     overview: 'Overview', findings: 'Findings', roles: 'Role Matrix',
-    chains: 'Attack Paths', mobile: 'Mobile Module', vault: 'Evidence Vault', methodology: 'Methodology', scope: 'Scope Guard',
+    chains: 'Attack Paths', mobile: 'Mobile Module', vault: 'Evidence Vault', methodology: 'Methodology', scope: 'Scope Guard', reports: 'Reports',
   };
   return (
-    <div style={{
+    <div className="trovex-topbar" style={{
       height: 44, borderBottom: '1px solid #1e2f46',
       display: 'flex', alignItems: 'center', paddingRight: 20, gap: 12,
       background: '#080c14', flexShrink: 0,
     }}>
       <div style={{ flex: 1, paddingLeft: 20 }}>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#6b8aac', letterSpacing: 1 }}>{labels[screen]}</span>
         {scanning && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span className="scan-line" style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#00d4ff' }} />
@@ -126,11 +132,20 @@ function TopBar({ screen, scanning, onKillSwitch, killActive }: { screen: Screen
       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#6b8aac' }}>
         {new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC
       </div>
+      <div style={{ width: 1, height: 18, background: '#1e2f46' }} />
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#e2eaf6' }}>{user.username}</div>
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8, color: '#00d4ff' }}>{user.role.replace('_', ' ')}</div>
+      </div>
+      <button onClick={onLogout} title="Sign out" aria-label="Sign out" style={{ border: '1px solid #1e2f46', borderRadius: 4, background: 'transparent', color: '#9cb1c9', padding: '6px 9px', cursor: 'pointer', fontSize: 10 }}>LOG OUT</button>
     </div>
   );
 }
 
 export default function App() {
+  const [authUser, setAuthUser] = useState<SessionUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authPage, setAuthPage] = useState<AuthPage>(() => window.location.pathname === '/signup' ? 'signup' : 'login');
   const [screen, setScreen] = useState<Screen>('overview');
   const [scanning, setScanning] = useState(false);
   const [showScan, setShowScan] = useState(false);
@@ -141,6 +156,39 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
+    fetch('/api/auth/session')
+      .then((response) => {
+        if (!response.ok) throw new Error('Session status unavailable');
+        return response.json();
+      })
+      .then((result) => {
+        if (!isMounted) return;
+        if (result.authenticated) {
+          setAuthUser(result.user);
+          window.history.replaceState({}, '', '/dashboard');
+        } else {
+          setAuthUser(null);
+          const authPath = window.location.pathname === '/signup' ? 'signup' : 'login';
+          setAuthPage(authPath);
+          if (!['/login', '/signup'].includes(window.location.pathname)) window.history.replaceState({}, '', '/login');
+        }
+      })
+      .catch(() => { if (isMounted) setAuthUser(null); })
+      .finally(() => { if (isMounted) setAuthChecked(true); });
+    return () => { isMounted = false; };
+  }, []);
+
+  useEffect(() => {
+    const syncAuthPage = () => {
+      setAuthPage(window.location.pathname === '/signup' ? 'signup' : 'login');
+    };
+    window.addEventListener('popstate', syncAuthPage);
+    return () => window.removeEventListener('popstate', syncAuthPage);
+  }, []);
+
+  useEffect(() => {
+    if (!authUser) return;
+    let isMounted = true;
     fetch('/api/scope/status')
       .then((response) => {
         if (!response.ok) throw new Error('Scope status unavailable');
@@ -149,10 +197,49 @@ export default function App() {
       .then((status) => { if (isMounted) setKillActive(status.killSwitch); })
       .catch(() => { if (isMounted) setKillActive(true); });
     return () => { isMounted = false; };
-  }, []);
+  }, [authUser]);
+
+  const handleLogin = async (username: string, password: string, remember: boolean) => {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username, password, remember }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Sign-in failed');
+    setAuthUser(result.user);
+    window.history.replaceState({}, '', '/dashboard');
+  };
+
+  const handleSignUp = async (input: { name: string; email: string; password: string; role: string; termsAccepted: boolean }) => {
+    const response = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Something went wrong while creating your account. Please try again.');
+    setAuthUser(result.user);
+    window.history.replaceState({}, '', '/dashboard');
+  };
+
+  const navigateAuthPage = (page: AuthPage) => {
+    window.history.pushState({}, '', `/${page}`);
+    setAuthPage(page);
+  };
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+    setAuthUser(null);
+    window.history.replaceState({}, '', '/login');
+    setAuthPage('login');
+    setScanning(false);
+    setShowScan(false);
+    setScanId(null);
+  };
 
   const handleRun = async () => {
-    if (killActive || scanning) return;
+    if (!authUser || authUser.role === 'VIEWER' || killActive || scanning) return;
     setRunError(null);
     setScanning(true);
     setScanId(null);
@@ -193,6 +280,7 @@ export default function App() {
   };
 
   const handleKillSwitch = async () => {
+    if (authUser?.role !== 'ADMIN') return;
     if (killSwitchPending) return;
     setKillSwitchPending(true);
     try {
@@ -211,8 +299,17 @@ export default function App() {
     }
   };
 
+  if (!authChecked) {
+    return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#080c14', color: '#6b8aac', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>CHECKING SESSION…</div>;
+  }
+  if (!authUser) {
+    return authPage === 'signup'
+      ? <SignUp onSignUp={handleSignUp} onNavigateLogin={() => navigateAuthPage('login')} />
+      : <Login onLogin={handleLogin} onNavigateSignup={() => navigateAuthPage('signup')} />;
+  }
+
   const screenEl = {
-    overview: <Overview onRunAssessment={handleRun} scanning={scanning} runError={runError} />,
+    overview: <Overview onRunAssessment={handleRun} scanning={scanning} runError={runError} canRunAssessment={authUser.role !== 'VIEWER'} />,
     findings: <FindingsScreen />,
     roles: <RoleMatrix />,
     chains: <AttackPaths />,
@@ -220,6 +317,7 @@ export default function App() {
     vault: <EvidenceVault />,
     methodology: <Methodology />,
     scope: <ScopeGuard />,
+    reports: <Reports />,
   }[screen];
 
   return (
@@ -229,9 +327,10 @@ export default function App() {
         onNavigate={setScreen}
         onKillSwitch={handleKillSwitch}
         killActive={killActive}
+        canKillSwitch={authUser.role === 'ADMIN'}
       />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <TopBar screen={screen} scanning={scanning} onKillSwitch={handleKillSwitch} killActive={killActive} />
+        <TopBar screen={screen} scanning={scanning} user={authUser} onLogout={handleLogout} />
         <main style={{ flex: 1, overflowY: 'auto' }}>
           {screenEl}
         </main>

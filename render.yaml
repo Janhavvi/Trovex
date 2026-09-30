@@ -16,9 +16,21 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: FRONTEND_URL
+        sync: false
       - key: DASHBOARD_USER
         value: trovex-admin
       - key: DASHBOARD_PASSWORD
+        generateValue: true
+      - key: ANALYST_USER
+        value: trovex-analyst
+      - key: ANALYST_PASSWORD
+        generateValue: true
+      - key: VIEWER_USER
+        value: trovex-viewer
+      - key: VIEWER_PASSWORD
+        generateValue: true
+      - key: AUTHORIZATION_SECRET
         generateValue: true
       - key: MONITOR_TOKEN
         generateValue: true

@@ -13,6 +13,6 @@ vite.config.*.timestamp-*
 logs/
 *.log
 src/assets/trovex-reference.png
-src/imports/TruthScan_Merged_Blueprint.pdf
+src/imports/Trovex_Merged_Blueprint.pdf
 .claude-replay.*
 .tmp-*

@@ -31,10 +31,17 @@ services:
     environment:
       PORT: 10000
       NODE_ENV: production
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8443}
       DASHBOARD_USER: ${DASHBOARD_USER:?Set DASHBOARD_USER in .env}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:?Set DASHBOARD_PASSWORD in .env}
+      ANALYST_USER: ${ANALYST_USER:-}
+      ANALYST_PASSWORD: ${ANALYST_PASSWORD:-}
+      VIEWER_USER: ${VIEWER_USER:-}
+      VIEWER_PASSWORD: ${VIEWER_PASSWORD:-}
+      AUTHORIZATION_SECRET: ${AUTHORIZATION_SECRET:?Set AUTHORIZATION_SECRET in .env}
       DATABASE_URL: postgresql://trovex:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/trovex
       N8N_BASE_URL: http://n8n:5678
+      SCANNER_BASE_URL: http://trovex-scanner:8082
       AUTHORIZED_LAB_URL: http://trovex-lab:10000
       LAB_AUTHORIZATION_REF: ${LAB_AUTHORIZATION_REF:?Set LAB_AUTHORIZATION_REF in .env}
       LAB_AUTHORIZATION_VALID_UNTIL: ${LAB_AUTHORIZATION_VALID_UNTIL:?Set LAB_AUTHORIZATION_VALID_UNTIL in .env}
@@ -55,8 +62,16 @@ services:
     restart: unless-stopped
     depends_on:
       - trovex-lab
+    tmpfs:
+      - /zap/wrk
     expose:
       - "8082"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8082/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     environment:
       PORT: 8082
       LAB_BASE_URL: http://trovex-lab:10000
