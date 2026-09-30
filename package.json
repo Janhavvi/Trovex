@@ -2,6 +2,7 @@
   "name": "trovex-platform",
   "private": true,
   "version": "1.0.0",
+  "packageManager": "pnpm@10.15.0",
   "description": "Trovex security assessment platform",
   "type": "module",
   "scripts": {
